@@ -75,6 +75,9 @@ class HX711:
 
     def tare(self, times=15):
         self.set_offset(self.read_average(times))
+        
+    def scale(self, times=15):
+        self.set_scale(self.read_average(times))
 
     def set_scale(self, scale):
         self.SCALE = scale
@@ -104,14 +107,28 @@ print(hx711)
 
 hx711.tare()
 time.sleep(0.4)
-hx711.tare()
-time.sleep(0.4)
-hx711.tare()
-time.sleep(0.4)
 
-print("Setup complete")
+#print("Tare complete complete")
+
+
+print("Now put scale factor")
+
+time.sleep(3)
+
+for i in range(3):
+    pass
+   #print("Setting scale")
+   #hx711.scale()
+   #print(hx711.SCALE)
+   #time.sleep(0.2)
+
+    
+
+#print("Reading")
+
 
 while True:
-    value = hx711.read_average(times=5)
+    #value = round(hx711.get_units(), 3)
+    value = hx711.read()
     print(value)
-    time.sleep(0.4)
+    time.sleep(0.5)

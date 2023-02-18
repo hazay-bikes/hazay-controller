@@ -1,26 +1,6 @@
-from machine import UART, Pin, freq
-from utime import sleep_us, time, sleep, sleep_ms
+from utime import sleep_us, time, sleep
+from machine import Pin, freq
 from micropython import const
-import json
-
-led = Pin(25, Pin.OUT)
-
-BLE_MODE_PIN = Pin(15 , Pin.IN , Pin.PULL_UP)
-
-uart = UART(0, baudrate=115200, tx=Pin(0), rx=Pin(1))
-
-Name_BLE_Set   = b"AT+BMHazayCargo #001\r\n"
-Name_BLE_Query = b"AT+TM\r\n"
-
-CMND_Scale_Tare = b"HazayCargo-Cmnd: Tare"
-
-uart.write(Name_BLE_Query)
-sleep_ms(100)
-uart.write(Name_BLE_Set)
-sleep_ms(100)
-
-
-SCALE_ID = 'hazay_001'
 
 
 class HX711Exception(Exception):
@@ -218,30 +198,6 @@ driver.scale()
 
 unit = 2.55
 
-
 while True:
-    
-    uart_data = uart.read()
-    # Support for tare
-    if uart_data == CMND_Scale_Tare:
-        print(uart_data)
-        driver.tare()
-        sleep(1)
-    
-    scale_reading_kg = abs(max(driver.get_units() * unit, 0))
-    
-    payload = {
-        'scale_reading_kg': float(scale_reading_kg),
-        'id': SCALE_ID
-    }
-    print(payload)
-    
-    payload_string = json.dumps(payload)
-    
-    
-    uart.write(payload_string)
-    led.value(1)            #Set led turn on
-    sleep(0.2)
-    led.value(0)
-    sleep(0.3)
-
+    sleep(0.5)
+    print("Hazay sensor nacisku odczyt: " + str(round(driver.get_units() * unit, 4)) + "kg")
