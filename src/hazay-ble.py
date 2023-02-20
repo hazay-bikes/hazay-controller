@@ -4,10 +4,11 @@ from micropython import const
 
 led = Pin(25, Pin.OUT)
 
+CONTROLLER_ID = 'hazay_001'
+
 BLE_MODE_PIN = Pin(15 , Pin.IN , Pin.PULL_UP)
 
 uart = UART(0, baudrate=115200, tx=Pin(0), rx=Pin(1))
-uart.init(baudrate=115200, tx=Pin(0), rx=Pin(1))
 
 Name_BLE_Set   = b"AT+BMHazayCargo_v1\r\n"
 Name_BLE_Query = b"AT+TM\r\n"
@@ -199,69 +200,50 @@ class HX711(object):
         return self.get_value() / self.SCALE
     
 
-freq(160000000)
-
-driver = HX711(d_out=5, pd_sck=4)
-
-
 def ble_init():
-    if( BLE_MODE_PIN.value() == 0 ):
-        print('Connect pls')
-        
     while(BLE_MODE_PIN.value() == 0):
         sleep_ms(50)
-    
-    while True:
-        Data_RX = uart.read(6)
-        if not ( Data_RX == b"ER+7\r\n" ):
-            break;
-    
-    if( BLE_MODE_PIN.value() == 1 ):
-        uart.write(Name_BLE_Query)
-        sleep_ms(100)
-        uart.write(Name_BLE_Set)
-        sleep_ms(100)
-        uart.write(Baud_Rate_Query)
-        sleep_ms(100)
-        uart.write(Baud_Rate_115200)
-        sleep_ms(100)
 
+    uart.write(Name_BLE_Query)
+    sleep_ms(100)
+    uart.write(Name_BLE_Set)
+    sleep_ms(100)
+    uart.write(Baud_Rate_Query)
+    sleep_ms(100)
+    uart.write(Baud_Rate_115200)
+    sleep_ms(100)
+
+
+freq(160000000)
+driver = HX711(d_out=5, pd_sck=4)
 driver.tare()
 sleep(0.5)
 driver.scale(known_scale=29713.86)
 unit = 2.55
 
 
-SCALE_ID = 1001
-
+uart.init(baudrate=115200, tx=Pin(0), rx=Pin(1))
 
 ble_init()
 
-
 while True:
-        
     
-    while(BLE_MODE_PIN.value() == 0):
-        sleep_ms(50)
+    if uart.any():
+        uart_data = uart.read()
+        # Support for tare
+        if uart_data == CMND_Scale_Tare:
+            driver.tare()
+            sleep_ms(500)
+
+    sleep_ms(100)
     
-    
-    uart_data = uart.read()
-    # Support for tare
-    if uart_data == CMND_Scale_Tare:
-        driver.tare()
-        sleep(1)
     
     scale_reading_kg = abs(max(driver.get_units() * unit, 0))
     scale_readings_g = str(int(scale_reading_kg * 1000))
     
-    
-    uart.write(scale_readings_g)
+    uart.write(scale_readings_g + ';' + CONTROLLER_ID)
+
     led.value(1)            #Set led turn on
-    sleep(0.2)
+    sleep_ms(200)
     led.value(0)
-    sleep(0.3)
-
-
-
-
-
+    sleep_ms(200)
