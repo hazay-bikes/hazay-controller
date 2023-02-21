@@ -1,22 +1,24 @@
 from machine import UART, Pin, freq
 from utime import sleep_us, time, sleep, sleep_ms
 from micropython import const
+import os
 
 led = Pin(25, Pin.OUT)
 
-CONTROLLER_ID = 'hazay_001'
+CONTROLLER_ID = "hazay_001"
 
-BLE_MODE_PIN = Pin(15 , Pin.IN , Pin.PULL_UP)
+BLE_MODE_PIN = Pin(15, Pin.IN, Pin.PULL_UP)
 
 uart = UART(0, baudrate=115200, tx=Pin(0), rx=Pin(1))
 
-Name_BLE_Set   = b"AT+BMHazayCargo_v1\r\n"
+Name_BLE_Set = b"AT+BMHazayCargo_v1\r\n"
 Name_BLE_Query = b"AT+TM\r\n"
 # Query baud rate
 Baud_Rate_115200 = b"AT+CT05\r\n"
-Baud_Rate_Query  = b"AT+QT\r\n"
+Baud_Rate_Query = b"AT+QT\r\n"
 
 CMND_Scale_Tare = b"HazayCargo-Cmnd: Tare"
+
 
 class HX711Exception(Exception):
     pass
@@ -35,23 +37,22 @@ class HX711(object):
     Micropython driver for Avia Semiconductor's HX711
     24-Bit Analog-to-Digital Converter
     """
+
     CHANNEL_A_128 = const(1)
     CHANNEL_A_64 = const(3)
     CHANNEL_B_32 = const(2)
 
     DATA_BITS = const(24)
-    MAX_VALUE = const(0x7fffff)
+    MAX_VALUE = const(0x7FFFFF)
     MIN_VALUE = const(0x800000)
     READY_TIMEOUT_SEC = const(5)
     SLEEP_DELAY_USEC = const(80)
-    
-    
 
     def __init__(self, d_out: int, pd_sck: int, channel: int = CHANNEL_A_128):
         self.d_out_pin = Pin(d_out, Pin.IN)
         self.pd_sck_pin = Pin(pd_sck, Pin.OUT, value=0)
         self.channel = channel
-        
+
         self.OFFSET = 0
         self.SCALE = 1
 
@@ -95,11 +96,11 @@ class HX711(object):
         of a tuple (Channel, Gain)
         """
         if self._channel == self.CHANNEL_A_128:
-            return 'A', 128
+            return "A", 128
         if self._channel == self.CHANNEL_A_64:
-            return 'A', 64
+            return "A", 64
         if self._channel == self.CHANNEL_B_32:
-            return 'B', 32
+            return "B", 32
 
     @channel.setter
     def channel(self, value):
@@ -110,7 +111,9 @@ class HX711(object):
         HX711.CHANNEL_B_32 - Channel B with gain 32
         """
         if value not in (self.CHANNEL_A_128, self.CHANNEL_A_64, self.CHANNEL_B_32):
-            raise InvalidMode('Gain should be one of HX711.CHANNEL_A_128, HX711.CHANNEL_A_64, HX711.CHANNEL_B_32')
+            raise InvalidMode(
+                "Gain should be one of HX711.CHANNEL_A_128, HX711.CHANNEL_A_64, HX711.CHANNEL_B_32"
+            )
         else:
             self._channel = value
 
@@ -169,18 +172,22 @@ class HX711(object):
         else:
             return self._convert_from_twos_complement(raw_data)
 
-    
     def read_average(self, times=3):
         sum = 0
         for i in range(times):
             sum += self.read()
         return sum / times
 
-    def tare(self, times=15):
-        self.set_offset(self.read_average(times))
-        
+    def tare(self, times=15, known_tare=None):
+        if known_tare:
+            offset = known_tare
+        else:
+            offset = self.read_average(times)
+        self.set_offset(offset)
+        return offset
+
     def scale(self, times=15, known_scale=None):
-        if not known_scale:   
+        if not known_scale:
             scale = self.read_average(times) - self.OFFSET
         else:
             scale = known_scale
@@ -191,17 +198,34 @@ class HX711(object):
 
     def set_offset(self, offset):
         self.OFFSET = offset
-    
+
     def get_value(self):
         return self.read_average() - self.OFFSET
-    
 
     def get_units(self):
         return self.get_value() / self.SCALE
-    
+
+    def is_tare_saved(self):
+        try:
+            os.stat("tare")
+            return True
+        except OSError:
+            return False
+
+    def load_saved_tare(self):
+        f = open("tare", "r")
+        data = f.read()
+        f.close()
+        return float(data)
+
+    def save_tare(self, offset):
+        f = open("tare", "w")
+        f.write(str(offset))
+        f.close()
+
 
 def ble_init():
-    while(BLE_MODE_PIN.value() == 0):
+    while BLE_MODE_PIN.value() == 0:
         sleep_ms(50)
 
     uart.write(Name_BLE_Query)
@@ -216,34 +240,42 @@ def ble_init():
 
 freq(160000000)
 driver = HX711(d_out=5, pd_sck=4)
-driver.tare()
-sleep(0.5)
-driver.scale(known_scale=29713.86)
-unit = 2.55
 
+
+# Tare logic
+if driver.is_tare_saved():
+    offset = driver.load_saved_tare()
+    driver.tare(known_tare=offset)
+else:
+    offset = driver.tare()
+    driver.save_tare(offset)
+sleep(0.5)
+
+driver.scale(known_scale=33150.00)
+SCALE_UNIT_KG = 1.556  # masa wody muszynianka 1.5L
 
 uart.init(baudrate=115200, tx=Pin(0), rx=Pin(1))
 
 ble_init()
 
 while True:
-    
     if uart.any():
         uart_data = uart.read()
         # Support for tare
         if uart_data == CMND_Scale_Tare:
-            driver.tare()
+            offset = driver.tare()
+            driver.save_tare(offset)
             sleep_ms(500)
 
     sleep_ms(100)
-    
-    
-    scale_reading_kg = abs(max(driver.get_units() * unit, 0))
+    scale_reading_kg = abs(max(driver.get_units() * SCALE_UNIT_KG, 0))
     scale_readings_g = str(int(scale_reading_kg * 1000))
-    
-    uart.write(scale_readings_g + ';' + CONTROLLER_ID)
 
-    led.value(1)            #Set led turn on
+    print(scale_readings_g)
+
+    uart.write(scale_readings_g + ";" + CONTROLLER_ID)
+
+    led.value(1)  # Set led turn on
     sleep_ms(200)
     led.value(0)
     sleep_ms(200)
