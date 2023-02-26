@@ -5,19 +5,24 @@ import os
 
 led = Pin(25, Pin.OUT)
 
-CONTROLLER_ID = "hazay_001"
+with open("id_version", "r") as f:
+    id_version = f.read()
+
+
+CONTROLLER_ID = "hazay_" + id_version
 
 BLE_MODE_PIN = Pin(15, Pin.IN, Pin.PULL_UP)
 
 uart = UART(0, baudrate=115200, tx=Pin(0), rx=Pin(1))
 
-Name_BLE_Set = b"AT+BMHazayCargo_v1\r\n"
+Name_BLE_Set = bytes("AT+BM" + CONTROLLER_ID + "\r\n", "utf-8")
 Name_BLE_Query = b"AT+TM\r\n"
 # Query baud rate
 Baud_Rate_115200 = b"AT+CT05\r\n"
 Baud_Rate_Query = b"AT+QT\r\n"
 
-CMND_Scale_Tare = b"HazayCargo-Cmnd: Tare"
+CMND_Tare = b"HazayCargo-Cmnd: Tare"
+CMND_Scale = b"HazayCargo-Cmnd: Scale"
 
 
 class HX711Exception(Exception):
@@ -55,6 +60,7 @@ class HX711(object):
 
         self.OFFSET = 0
         self.SCALE = 1
+        self.UNIT = 1
 
     def __repr__(self):
         return "HX711 on channel %s, gain=%s" % self.channel
@@ -186,15 +192,23 @@ class HX711(object):
         self.set_offset(offset)
         return offset
 
-    def scale(self, times=15, known_scale=None):
+    def scale(self, times=15, known_scale=None, known_unit=None):
         if not known_scale:
             scale = self.read_average(times) - self.OFFSET
         else:
             scale = known_scale
         self.set_scale(scale)
 
+        if known_unit:
+            self.set_unit(known_unit)
+
+        return scale, known_unit
+
     def set_scale(self, scale):
         self.SCALE = scale
+
+    def set_unit(self, unit):
+        self.UNIT = unit
 
     def set_offset(self, offset):
         self.OFFSET = offset
@@ -204,6 +218,9 @@ class HX711(object):
 
     def get_units(self):
         return self.get_value() / self.SCALE
+
+    def get_reading_in_unit_grams(self):
+        return int(abs(max(driver.get_units() * self.UNIT, 0)))
 
     def is_tare_saved(self):
         try:
@@ -221,6 +238,25 @@ class HX711(object):
     def save_tare(self, offset):
         f = open("tare", "w")
         f.write(str(offset))
+        f.close()
+
+    def is_scale_unit_saved(self):
+        try:
+            os.stat("scale_unit")
+            return True
+        except OSError:
+            return False
+
+    def load_saved_scale_unit(self):
+        f = open("scale_unit", "r")
+        data = f.read()
+        f.close()
+        scale, unit = data.split(":")
+        return float(scale), int(unit)
+
+    def save_scale_unit(self, scale, unit):
+        f = open("scale_unit", "w")
+        data = f.write(str(scale) + ":" + str(unit))
         f.close()
 
 
@@ -251,8 +287,15 @@ else:
     driver.save_tare(offset)
 sleep(0.5)
 
-driver.scale(known_scale=33150.00)
-SCALE_UNIT_KG = 1.556  # masa wody muszynianka 1.5L
+
+# Scale logic
+if not driver.is_scale_unit_saved():
+    # initial default values - will be calibrated later by user
+    drive.save_scale_unit(scale=33150.00, unit=1556)
+
+# load saved scale and unit
+scale, unit = driver.load_saved_scale_unit()
+driver.scale(known_scale=scale, known_unit=unit)
 
 uart.init(baudrate=115200, tx=Pin(0), rx=Pin(1))
 
@@ -262,14 +305,20 @@ while True:
     if uart.any():
         uart_data = uart.read()
         # Support for tare
-        if uart_data == CMND_Scale_Tare:
+        if uart_data == CMND_Tare:
             offset = driver.tare()
             driver.save_tare(offset)
             sleep_ms(500)
+        elif CMND_Scale in uart_data:
+            decoded_data = uart_data.decode("utf-8")
+            mass_grams = int(decoded_data.split(";")[1].split(":")[1])
+            scale, unit = driver.scale(known_unit=mass_grams)
+            driver.save_scale_unit(scale=scale, unit=unit)
+            sleep_ms(500)
 
     sleep_ms(100)
-    scale_reading_kg = abs(max(driver.get_units() * SCALE_UNIT_KG, 0))
-    scale_readings_g = str(int(scale_reading_kg * 1000))
+
+    scale_readings_g = str(driver.get_reading_in_unit_grams())
 
     print(scale_readings_g)
 
