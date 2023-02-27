@@ -8,7 +8,6 @@ led = Pin(25, Pin.OUT)
 with open("id_version", "r") as f:
     id_version = f.read()
 
-
 CONTROLLER_ID = "hazay_" + id_version
 
 BLE_MODE_PIN = Pin(15, Pin.IN, Pin.PULL_UP)
@@ -260,10 +259,7 @@ class HX711(object):
         f.close()
 
 
-def ble_init():
-    while BLE_MODE_PIN.value() == 0:
-        sleep_ms(50)
-
+def ble_config():
     uart.write(Name_BLE_Query)
     sleep_ms(100)
     uart.write(Name_BLE_Set)
@@ -272,6 +268,16 @@ def ble_init():
     sleep_ms(100)
     uart.write(Baud_Rate_115200)
     sleep_ms(100)
+
+
+def ble_init():
+    # initial config
+    ble_config()
+
+    while BLE_MODE_PIN.value() == 0:
+        sleep_ms(50)
+
+    ble_config()
 
 
 freq(160000000)
@@ -291,7 +297,7 @@ sleep(0.5)
 # Scale logic
 if not driver.is_scale_unit_saved():
     # initial default values - will be calibrated later by user
-    drive.save_scale_unit(scale=33150.00, unit=1556)
+    driver.save_scale_unit(scale=33150.00, unit=1556)
 
 # load saved scale and unit
 scale, unit = driver.load_saved_scale_unit()
