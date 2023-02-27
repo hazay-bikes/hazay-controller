@@ -291,7 +291,7 @@ sleep(0.5)
 # Scale logic
 if not driver.is_scale_unit_saved():
     # initial default values - will be calibrated later by user
-    drive.save_scale_unit(scale=33150.00, unit=1556)
+    driver.save_scale_unit(scale=33150.00, unit=1556)
 
 # load saved scale and unit
 scale, unit = driver.load_saved_scale_unit()
