@@ -12,9 +12,9 @@
 8. Connect to scale unit, mount on bike
 9. Use app to tare and scale the sensor
 
-### Docs
+### Diagram
 
-- [4x50kg load cells with HX711 (setup overview)](https://circuitjournal.com/50kg-load-cells-with-HX711)
+![Circuit diagram](/assets/circuit.png)
 
 ### Circuit
 
