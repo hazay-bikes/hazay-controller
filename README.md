@@ -18,7 +18,7 @@
 
 ![Circuit diagram](/assets/circuit.png)
 
-### Circuit
+### Circuit (Internal Use)
 
 | Cable Color | Pico Pin | HX711 Pin |
 | ----------- | -------- | --------- |
