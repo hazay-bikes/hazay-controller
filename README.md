@@ -1,4 +1,6 @@
-# Hazay Controller
+# Hazay Cargo Bike Scale Controller
+
+![Vision](/assets/vision.png)
 
 ### Setup
 
